@@ -1,14 +1,118 @@
 import * as PIXI from "pixi.js";
-import { XYVec } from "./character";
-import { map } from "./rawMap";
+import { XYVec, Character } from "./character";
 
-export const mapTileSize = 64;
-export type RawMap = number[][];
+export interface PlayerData {
+  name: string;
+  sprite: PIXI.Sprite;
+  x: number;
+  y: number;
+}
+
+export interface RawTile {
+  x: number;
+  y: number;
+  type: number;
+  index: number;
+  walkable: boolean;
+}
+export interface RawMap {
+  width: number;
+  height: number;
+  content: RawTile;
+}
 
 export enum TileType {
   Water,
   Sand,
   Grass
+}
+
+export class Map {
+  public mapTileSize: number;
+  resources: { [sprite: string]: { texture: PIXI.Texture; textures: PIXI.Texture[] } };
+  public tileMap: TileMap;
+
+  constructor(payload: RawMap, resources) {
+    this.resources = resources;
+    this.tileMap = this.createMap(payload);
+  }
+
+  public setTileSize() {
+    const maxTilesDisplayedX = 16;
+    const maxTilesDisplayedY = 9;
+    this.mapTileSize = Math.min(
+      window.innerHeight / maxTilesDisplayedY,
+      window.innerWidth / maxTilesDisplayedX
+    );
+  }
+
+  public render() {
+    Object.keys(this.tileMap.tiles).forEach((tileKey: string) => {
+      const tile = this.tileMap.tiles[tileKey];
+      this.setTileSize();
+      const maxTilesDisplayedX = 16;
+      const maxTilesDisplayedY = 9;
+      const mapTileSize = Math.min(
+        window.innerHeight / maxTilesDisplayedY,
+        window.innerWidth / maxTilesDisplayedX
+      );
+      tile.sprites.forEach(sprite => {
+        sprite.x = tile.x * this.mapTileSize;
+        sprite.y = tile.y * this.mapTileSize;
+        sprite.height = this.mapTileSize;
+        sprite.width = this.mapTileSize;
+      });
+    });
+  }
+
+  public createMap(rawMap: RawMap): TileMap {
+    const map = rawMap;
+    this.tileMap = {
+      landTileSprites: new PIXI.ParticleContainer(map.width * map.height + 1),
+      objectSprites: new PIXI.ParticleContainer((map.width * map.height) / 4),
+      // landTileSprites: new PIXI.Container(),
+      // objectSprites: new PIXI.Container(),
+      size: { x: map.width, y: map.height },
+      tiles: {}
+    };
+
+    const textures = this.resources.sprites.textures;
+
+    Object.keys(map.content).forEach(key => {
+      const elems: RawTile[] = map.content[key];
+      elems.forEach(elem => {
+        const sprite = new PIXI.Sprite(textures[getSpriteName(elem.type)]);
+
+        if (elem.type < 3) {
+          this.tileMap.landTileSprites.addChild(sprite);
+        } else {
+          this.tileMap.objectSprites.addChild(sprite);
+        }
+
+        const oldTileSummary: TileSummary = this.tileMap.tiles[`${elem.x};${elem.y}`];
+        let walkable = true;
+        let sprites = [sprite];
+        if (oldTileSummary) {
+          walkable = oldTileSummary.walkable;
+          sprites = [sprite, ...oldTileSummary.sprites];
+        }
+
+        const tile: TileSummary = {
+          x: elem.x,
+          y: elem.y,
+          type: elem.type,
+          gatherable: false,
+          walkable: !walkable ? false : elem.walkable,
+          sprites
+        };
+
+        this.tileMap.tiles[`${elem.x};${elem.y}`] = tile;
+      });
+    });
+
+    this.render();
+    return this.tileMap;
+  }
 }
 
 const getSpriteName = (i: number) => {
@@ -19,143 +123,27 @@ const getSpriteName = (i: number) => {
       return "sand";
     case 2:
       return "grass";
+    case 3:
+      return "tree";
+    case 4:
+      return "stone";
     default:
-      return "water";
+      return "concrete";
   }
 };
 
-export interface Tile {
+export interface TileSummary {
   x: number;
   y: number;
-  sprite: PIXI.Sprite;
+  sprites: PIXI.Sprite[];
   type: TileType;
+  walkable: boolean;
+  gatherable: boolean;
 }
 
 export interface TileMap {
-  tiles: Tile[];
-  tileSprites: PIXI.ParticleContainer | PIXI.Container;
+  tiles: { [coords: string]: TileSummary };
+  landTileSprites: PIXI.ParticleContainer | PIXI.Container;
+  objectSprites: PIXI.ParticleContainer | PIXI.Container;
   size: XYVec;
-}
-
-const isTopRight = (map: RawMap, x: number, y: number): boolean =>
-  isTop(map, x, y) && isRight(map, x, y);
-const isBottomRight = (map: RawMap, x: number, y: number): boolean =>
-  isBottom(map, x, y) && isRight(map, x, y);
-const isBottomLeft = (map: RawMap, x: number, y: number): boolean =>
-  isBottom(map, x, y) && isLeft(map, x, y);
-const isTopLeft = (map: RawMap, x: number, y: number): boolean =>
-  isTop(map, x, y) && isLeft(map, x, y);
-const isTop = (map: RawMap, x: number, y: number): boolean => {
-  const actualTileType = map[y][x];
-
-  if (y > 0 && map[y - 1][x] !== actualTileType) {
-    return true;
-  }
-  return false;
-};
-const isRight = (map: RawMap, x: number, y: number): boolean => {
-  const actualTileType = map[y][x];
-
-  if (x < map[0].length - 1 && map[y][x + 1] !== actualTileType) {
-    return true;
-  }
-  return false;
-};
-const isBottom = (map: RawMap, x: number, y: number): boolean => {
-  const actualTileType = map[y][x];
-
-  if (y < map.length - 1 && map[y + 1][x] !== actualTileType) {
-    return true;
-  }
-  return false;
-};
-const isLeft = (map: RawMap, x: number, y: number): boolean => {
-  const actualTileType = map[y][x];
-
-  if (x > 0 && map[y][x - 1] !== actualTileType) {
-    return true;
-  }
-  return false;
-};
-
-const getPrefix = (map: RawMap, x: number, y: number) => {
-  const actualTileType = map[y][x];
-
-  if (isTopRight(map, x, y)) {
-    return "top_right_";
-  } else if (isBottomRight(map, x, y)) {
-    return "bottom_right_";
-  } else if (isBottomLeft(map, x, y)) {
-    return "bottom_left_";
-  } else if (isTopLeft(map, x, y)) {
-    return "top_left_";
-  } else if (isTop(map, x, y)) {
-    return "top_";
-  } else if (isRight(map, x, y)) {
-    return "right_";
-  } else if (isBottom(map, x, y)) {
-    return "bottom_";
-  } else if (isLeft(map, x, y)) {
-    return "left_";
-  } else {
-    return "";
-  }
-};
-
-export function createMap(resources): TileMap {
-  let y = 0;
-  let x = 0;
-
-  const tileMap = {
-    tileSprites: new PIXI.ParticleContainer(100 * 100),
-    // tileSprites: new PIXI.Container(),
-    size: { x: map.length, y: map.length },
-    tiles: []
-  };
-
-  const textures = resources.sprites.textures;
-
-  // const rects = [
-  //   new PIXI.Rectangle(16, 112, 16, 16), // Water
-  //   new PIXI.Rectangle(16, 16, 16, 16) // Grass
-  // ];
-
-  while (y < map.length) {
-    while (x < map.length) {
-      const type = map[y][x];
-      // texture.frame = rects[type];
-      console.log(getPrefix(map, x, y) + getSpriteName(type));
-      const sprite = new PIXI.Sprite(textures[getSpriteName(type)]);
-
-      sprite.x = x * mapTileSize;
-      sprite.y = y * mapTileSize;
-      sprite.height = mapTileSize;
-      sprite.width = mapTileSize;
-
-      // const debugCoords = new PIXI.Text(`${x}/${y}`, {
-      //   font: "bold 12px Arial",
-      //   fill: "#0f0f20",
-      //   align: "center"
-      // });
-      // debugCoords.position.x = x * mapTileSize;
-      // debugCoords.position.y = y * mapTileSize;
-
-      tileMap.tileSprites.addChild(sprite);
-      // tileMap.tileSprites.addChild(debugCoords);
-
-      const tile: Tile = {
-        x: x,
-        y: y,
-        type,
-        sprite
-      };
-
-      tileMap.tiles.push(tile);
-      x += 1;
-    }
-    x = 0;
-    y += 1;
-  }
-
-  return tileMap;
 }
