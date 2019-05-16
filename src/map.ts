@@ -51,8 +51,8 @@ export class Map {
   public createMap(rawMap: MapPayload): TileMap {
     const map = rawMap;
     this.tileMap = {
-      landTileSprites: new PIXI.ParticleContainer(map.width * map.height + 1),
-      objectSprites: new PIXI.ParticleContainer((map.width * map.height) / 4),
+      landTileSprites: new PIXI.ParticleContainer(map.width * map.height + 1, { vertices: true }),
+      objectSprites: new PIXI.ParticleContainer((map.width * map.height) / 4, { vertices: true }),
       // landTileSprites: new PIXI.Container(),
       // objectSprites: new PIXI.Container(),
       size: { x: map.width, y: map.height },

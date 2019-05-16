@@ -25,7 +25,10 @@ export class Game {
   constructor(app: PIXI.Application) {
     this.app = app;
     this.players = {};
-    this.loadResources();
+  }
+
+  async loadGame() {
+    await this.loadResources();
     setupSocket()
       .then(communicator => {
         this.communicator = communicator;
@@ -33,8 +36,8 @@ export class Game {
         this.communicator.on(MsgType.Map, (data: MapPayload) => {
           this.map = new Map(data, this.resources);
 
-          app.ticker.add(delta => this.loop(delta));
-          app.ticker.add(delta => this.tweenPlayers(delta));
+          this.app.ticker.add(delta => this.loop(delta));
+          this.app.ticker.add(delta => this.tweenPlayers(delta));
 
           this.app.stage.addChild(this.map.tileMap.landTileSprites);
           this.app.stage.addChild(this.map.tileMap.objectSprites);
@@ -55,7 +58,7 @@ export class Game {
             );
             char.sprite.height = characterSize * this.map.mapTileSize;
             char.sprite.width = characterSize * this.map.mapTileSize;
-            app.stage.addChild(char.sprite);
+            this.app.stage.addChild(char.sprite);
             this.players[player.id] = char;
             this.lastPos[player.id] = {
               ts: char.updatedAt,
@@ -81,7 +84,7 @@ export class Game {
             player.velocity
           );
           this.renderPlayer();
-          app.stage.addChild(this.player.sprite);
+          this.app.stage.addChild(this.player.sprite);
           this.player.sprite.on("pointermove", () => moveChararacter(this.player, this.app));
         });
 
@@ -112,14 +115,17 @@ export class Game {
     });
   }
 
-  loadResources() {
-    this.app.loader
-      .add("sprites", "spritesheet.json")
-      .add("char", "char.png")
-      .load((_loader: any, resources: Resources) => {
-        this.resources = resources;
-        this.onResourcesLoad && this.onResourcesLoad();
-      });
+  async loadResources() {
+    return new Promise((resolve, reject) => {
+      this.app.loader
+        .add("sprites", "spritesheet.json")
+        .add("char", "char.png")
+        .load((_loader: any, resources: Resources) => {
+          this.resources = resources;
+          this.onResourcesLoad && this.onResourcesLoad();
+          resolve(this);
+        });
+    });
   }
 
   lerp(start: number, end: number, t: number) {
@@ -221,21 +227,7 @@ export class Game {
     this.map.tileMap.landTileSprites.y = mapOrigin.y - this.player.position.y * mapTileSize;
     this.map.tileMap.objectSprites.x = mapOrigin.x - this.player.position.x * mapTileSize;
     this.map.tileMap.objectSprites.y = mapOrigin.y - this.player.position.y * mapTileSize;
-    // Object.keys(this.players).forEach(id => {
-    //   this.players[id].sprite.x =
-    //     mapOrigin.x +
-    //     this.players[id].position.x * mapTileSize -
-    //     this.player.position.x * mapTileSize;
-    //   this.players[id].sprite.y =
-    //     mapOrigin.y +
-    //     this.players[id].position.y * mapTileSize -
-    //     this.player.position.y * mapTileSize;
-    //   const orientation = Math.atan2(
-    //     this.players[id].orientation.y,
-    //     this.players[id].orientation.x
-    //   );
-    //   this.players[id].sprite.rotation = orientation + 1.57; // (1.57 = 90deg)
-    // });
+
     if (this.timerDelay >= 5 /* && coords have changed */) {
       // * 16 ms * 3
       this.communicator.sendMsg(
