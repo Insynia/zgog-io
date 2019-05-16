@@ -1,3 +1,4 @@
+import { XYVec } from "./character";
 import * as PIXI from "pixi.js";
 
 export const characterSize = 1;
@@ -9,28 +10,33 @@ export interface XYVec {
 }
 
 export interface Character {
+  updatedAt: number;
   position: XYVec;
   sprite: PIXI.Sprite;
+  orientation: XYVec;
   velocity: XYVec;
 }
 
 export function createCharacter(
   resources: { [sprite: string]: { texture: PIXI.Texture } },
-  x = 0,
-  y = 0
-): PIXI.Sprite {
+  position: XYVec,
+  orientation: XYVec,
+  velocity: XYVec
+): Character {
   const sprite = new PIXI.Sprite(resources.char.texture);
   sprite.interactive = true;
 
-  sprite.anchor.set(0.5);
-  return sprite;
-}
+  const v = velocity || { x: 0, y: 0 };
+  const o = orientation || { x: 0, y: 0 };
+  const p = position || { x: 0, y: 0 };
 
-export function createHero(resources: { [sprite: string]: { texture: PIXI.Texture } }): Character {
+  sprite.anchor.set(0.5);
   let char: Character = {
-    position: { x: 0, y: 0 },
-    velocity: { x: 0, y: 0 },
-    sprite: createCharacter(resources)
+    updatedAt: new Date().getTime(),
+    position: p,
+    orientation: o,
+    velocity: v,
+    sprite
   };
   return char;
 }
@@ -39,6 +45,8 @@ export function moveChararacter(char: Character, app: PIXI.Application) {
   const mouseLeeway = 32;
   const mouseX = app.renderer.plugins.interaction.mouse.global.x;
   const mouseY = app.renderer.plugins.interaction.mouse.global.y;
+
+  char.orientation = { y: mouseY - window.innerHeight / 2, x: mouseX - window.innerWidth / 2 };
 
   const orientation = Math.atan2(mouseY - window.innerHeight / 2, mouseX - window.innerWidth / 2);
   char.sprite.rotation = orientation + 1.57; // (1.57 = 90deg)
@@ -61,3 +69,5 @@ export function moveChararacter(char: Character, app: PIXI.Application) {
     char.velocity.x = 0;
   }
 }
+
+export const setSmoothedPos = (positionStart: XYVec, positionEnd: XYVec) => {};

@@ -1,25 +1,6 @@
 import * as PIXI from "pixi.js";
 import { XYVec, Character } from "./character";
-
-export interface PlayerData {
-  name: string;
-  sprite: PIXI.Sprite;
-  x: number;
-  y: number;
-}
-
-export interface RawTile {
-  x: number;
-  y: number;
-  type: number;
-  index: number;
-  walkable: boolean;
-}
-export interface RawMap {
-  width: number;
-  height: number;
-  content: RawTile;
-}
+import { TilePayload, MapPayload } from "./communication";
 
 export enum TileType {
   Water,
@@ -29,10 +10,17 @@ export enum TileType {
 
 export class Map {
   public mapTileSize: number;
-  resources: { [sprite: string]: { texture: PIXI.Texture; textures: PIXI.Texture[] } };
+  resources: {
+    [sprite: string]: { texture: PIXI.Texture; textures: { [sprite: string]: PIXI.Texture } };
+  };
   public tileMap: TileMap;
 
-  constructor(payload: RawMap, resources) {
+  constructor(
+    payload: MapPayload,
+    resources: {
+      [sprite: string]: { texture: PIXI.Texture; textures: { [sprite: string]: PIXI.Texture } };
+    }
+  ) {
     this.resources = resources;
     this.tileMap = this.createMap(payload);
   }
@@ -50,12 +38,7 @@ export class Map {
     Object.keys(this.tileMap.tiles).forEach((tileKey: string) => {
       const tile = this.tileMap.tiles[tileKey];
       this.setTileSize();
-      const maxTilesDisplayedX = 16;
-      const maxTilesDisplayedY = 9;
-      const mapTileSize = Math.min(
-        window.innerHeight / maxTilesDisplayedY,
-        window.innerWidth / maxTilesDisplayedX
-      );
+
       tile.sprites.forEach(sprite => {
         sprite.x = tile.x * this.mapTileSize;
         sprite.y = tile.y * this.mapTileSize;
@@ -65,7 +48,7 @@ export class Map {
     });
   }
 
-  public createMap(rawMap: RawMap): TileMap {
+  public createMap(rawMap: MapPayload): TileMap {
     const map = rawMap;
     this.tileMap = {
       landTileSprites: new PIXI.ParticleContainer(map.width * map.height + 1),
@@ -79,7 +62,7 @@ export class Map {
     const textures = this.resources.sprites.textures;
 
     Object.keys(map.content).forEach(key => {
-      const elems: RawTile[] = map.content[key];
+      const elems: TilePayload[] = map.content[key];
       elems.forEach(elem => {
         const sprite = new PIXI.Sprite(textures[getSpriteName(elem.type)]);
 
