@@ -4,7 +4,8 @@ export enum MsgType {
   ReceivePlayer = "hero",
   Map = "map",
   PlayerUpdated = "player_updated",
-  UpdateCoords = "player_coords"
+  UpdateCoords = "player_coords",
+  AllPlayers = "all_players"
 }
 
 // Payloads

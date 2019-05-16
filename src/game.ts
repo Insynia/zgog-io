@@ -19,6 +19,7 @@ export class Game {
   onResourcesLoad: () => void;
   onConnectionFailure: () => void;
   lastPos: { [id: string]: { ts: number; position: XYVec; orientation: XYVec } } = {};
+  curPredictedPos: { [id: string]: XYVec } = {};
 
   posElapsed = 0;
 
@@ -38,52 +39,62 @@ export class Game {
           this.map = new Map(data, this.resources);
 
           this.app.ticker.add(delta => this.loop(delta));
-          this.app.ticker.add(delta => this.tweenPlayers(delta));
+          this.app.ticker.add(delta => this.renderPlayers(delta));
 
           this.app.stage.addChild(this.map.tileMap.landTileSprites);
           this.app.stage.addChild(this.map.tileMap.objectSprites);
           window.onresize = () => this.resizeGame();
           this.map.render();
         });
-        this.communicator.on(MsgType.PlayerUpdated, (player: PlayerPayload) => {
+        this.communicator.on(MsgType.AllPlayers, (players: PlayerPayload[]) => {
           if (!this.map) {
             return;
           }
-          const p = this.players[player.id];
-          if (!this.players[player.id]) {
-            const char = createCharacter(
-              this.resources,
-              player.position,
-              player.orientation,
-              player.velocity
-            );
-            char.sprite.height = characterSize * this.map.mapTileSize;
-            char.sprite.width = characterSize * this.map.mapTileSize;
-            this.app.stage.addChild(char.sprite);
-            this.players[player.id] = char;
-            this.lastPos[player.id] = {
-              ts: char.updatedAt,
-              position: char.position,
-              orientation: char.orientation
-            };
-          } else {
-            this.lastPos[player.id] = {
-              ts: p.updatedAt,
-              position: p.position,
-              orientation: p.orientation
-            };
-            this.players[player.id] = { ...p, ...player };
-            this.players[player.id].updatedAt = new Date().getTime();
-            this.posElapsed = 0;
-          }
+          players.forEach(player => {
+            const p = this.players[player.id];
+            if (!this.players[player.id]) {
+              const char = createCharacter(
+                this.resources,
+                player.id,
+                player.position,
+                player.orientation,
+                player.velocity
+              );
+              char.sprite.height = characterSize * this.map.mapTileSize;
+              char.sprite.width = characterSize * this.map.mapTileSize;
+              this.app.stage.addChild(char.sprite);
+
+              this.players[player.id] = char;
+              this.curPredictedPos[player.id] = char.position;
+              this.lastPos[player.id] = {
+                ts: char.updatedAt,
+                position: char.position,
+                orientation: char.orientation
+              };
+            } else {
+              this.lastPos[player.id] = {
+                ts: p.updatedAt,
+                position: this.curPredictedPos[player.id],
+                orientation: p.orientation
+              };
+              p.updatedAt = new Date().getTime();
+              this.players[player.id] = { ...p, ...player };
+            }
+          });
+          this.posElapsed = 0;
         });
         this.communicator.on(MsgType.ReceivePlayer, (player: PlayerPayload) => {
           this.player = createCharacter(
             this.resources,
+            player.id,
             player.position,
             player.orientation,
             player.velocity
           );
+          // DEBUG
+          this.player.sprite.tint = 0x70fab0;
+          this.player.sprite.alpha = 0;
+          //
           this.renderPlayer();
           this.app.stage.addChild(this.player.sprite);
           this.player.sprite.on("pointermove", () => moveChararacter(this.player, this.app));
@@ -129,11 +140,13 @@ export class Game {
     });
   }
 
-  lerp(start: number, end: number, t: number) {
+  lerp(start: number, end: number, rt: number) {
+    const t = Math.min(rt, 1);
     return (1 - t) * start + t * end;
   }
 
-  tweenPlayers(delta: number) {
+  renderPlayers(delta: number) {
+    this.posElapsed += this.app.ticker.elapsedMS;
     if (!this.player) {
       return;
     }
@@ -150,43 +163,33 @@ export class Game {
       const orientation = Math.atan2(p.orientation.y, p.orientation.x);
       p.sprite.rotation = orientation + 1.57; // (1.57 = 90deg)
 
-      if (
-        this.lastPos[id].position.x !== p.position.x ||
-        this.lastPos[id].position.y !== p.position.y
-      ) {
-        const x = this.lerp(
-          this.lastPos[id].position.x,
-          p.position.x,
-          this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
-        );
-        const y = this.lerp(
-          this.lastPos[id].position.y,
-          p.position.y,
-          this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
-        );
-        p.sprite.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
-        p.sprite.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
-      }
+      const x = this.lerp(
+        this.lastPos[id].position.x,
+        p.position.x,
+        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+      );
+      const y = this.lerp(
+        this.lastPos[id].position.y,
+        p.position.y,
+        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+      );
+      this.curPredictedPos[id] = { x, y };
+      p.sprite.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
+      p.sprite.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
 
-      if (
-        this.lastPos[id].orientation.x !== p.orientation.x ||
-        this.lastPos[id].orientation.y !== p.orientation.y
-      ) {
-        const rx = this.lerp(
-          this.lastPos[id].orientation.x,
-          p.orientation.x,
-          this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
-        );
-        const ry = this.lerp(
-          this.lastPos[id].orientation.y,
-          p.orientation.y,
-          this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
-        );
+      const rx = this.lerp(
+        this.lastPos[id].orientation.x,
+        p.orientation.x,
+        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+      );
+      const ry = this.lerp(
+        this.lastPos[id].orientation.y,
+        p.orientation.y,
+        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+      );
 
-        p.sprite.rotation = Math.atan2(ry, rx) + 1.57;
-      }
+      p.sprite.rotation = Math.atan2(ry, rx) + 1.57;
     });
-    this.posElapsed += delta * 16.66;
   }
 
   timerDelay = 0;
@@ -229,7 +232,7 @@ export class Game {
     this.map.tileMap.objectSprites.x = mapOrigin.x - this.player.position.x * mapTileSize;
     this.map.tileMap.objectSprites.y = mapOrigin.y - this.player.position.y * mapTileSize;
 
-    if (this.timerDelay >= 5 /* && coords have changed */) {
+    if (this.timerDelay >= 3 /* && coords have changed */) {
       // * 16 ms * 3
       this.communicator.sendMsg(
         JSON.stringify({

@@ -28,7 +28,7 @@ export class Map {
   public setTileSize() {
     const maxTilesDisplayedX = 16;
     const maxTilesDisplayedY = 9;
-    this.mapTileSize = Math.min(
+    this.mapTileSize = Math.max(
       window.innerHeight / maxTilesDisplayedY,
       window.innerWidth / maxTilesDisplayedX
     );

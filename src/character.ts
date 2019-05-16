@@ -10,6 +10,7 @@ export interface XYVec {
 }
 
 export interface Character {
+  id: string;
   updatedAt: number;
   position: XYVec;
   sprite: PIXI.Sprite;
@@ -19,6 +20,7 @@ export interface Character {
 
 export function createCharacter(
   resources: { [sprite: string]: { texture: PIXI.Texture } },
+  id: string,
   position: XYVec,
   orientation: XYVec,
   velocity: XYVec
@@ -32,6 +34,7 @@ export function createCharacter(
 
   sprite.anchor.set(0.5);
   let char: Character = {
+    id,
     updatedAt: new Date().getTime(),
     position: p,
     orientation: o,
