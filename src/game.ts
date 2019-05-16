@@ -25,6 +25,7 @@ export class Game {
   constructor(app: PIXI.Application) {
     this.app = app;
     this.players = {};
+    this.loadGame();
   }
 
   async loadGame() {
