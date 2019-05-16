@@ -157,6 +157,14 @@ export class Game {
           p.position.y,
           this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
         );
+        p.sprite.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
+        p.sprite.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
+      }
+
+      if (
+        this.lastPos[id].orientation.x !== p.orientation.x ||
+        this.lastPos[id].orientation.y !== p.orientation.y
+      ) {
         const rx = this.lerp(
           this.lastPos[id].orientation.x,
           p.orientation.x,
@@ -168,9 +176,6 @@ export class Game {
           this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
         );
 
-        // p.position = pos;
-        p.sprite.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
-        p.sprite.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
         p.sprite.rotation = Math.atan2(ry, rx) + 1.57;
       }
     });
