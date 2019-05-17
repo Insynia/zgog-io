@@ -1,3 +1,20 @@
 .Interface {
-  opacity: 0.3;
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+
+  .NewGameInterface {
+    transform: translateX(-50%);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+  }
+
+  .Error {
+    margin: 1em;
+    color: #ff6d6d;
+    font-size: 2em;
+    transform: translateX(-50%);
+    position: absolute;
+    left: 50%;
+    top: 0;
+  }
 }

@@ -25,6 +25,3 @@ const game = new Game(app);
 setupInterface(game);
 
 document.body.appendChild(app.view);
-const speed = new PIXI.Text(`Speed: 0 | 0`);
-
-let timer = 0;

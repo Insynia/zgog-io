@@ -19,7 +19,10 @@ export class Game {
   onResourcesLoad: () => void;
   onConnectionFailure: () => void;
   lastPos: { [id: string]: { ts: number; position: XYVec; orientation: XYVec } } = {};
+  lastPosSentAt: number = new Date().getTime();
+  lastPosSentAtN1: number = new Date().getTime();
   curPredictedPos: { [id: string]: XYVec } = {};
+  predictedPos: { [id: string]: XYVec } = {};
 
   posElapsed = 0;
 
@@ -66,12 +69,14 @@ export class Game {
 
               this.players[player.id] = char;
               this.curPredictedPos[player.id] = char.position;
+              this.predictedPos[player.id] = char.position;
               this.lastPos[player.id] = {
                 ts: char.updatedAt,
                 position: char.position,
                 orientation: char.orientation
               };
             } else {
+              this.predictedPos[player.id] = this.curPredictedPos[player.id];
               this.lastPos[player.id] = {
                 ts: p.updatedAt,
                 position: this.curPredictedPos[player.id],
@@ -81,7 +86,9 @@ export class Game {
               this.players[player.id] = { ...p, ...player };
             }
           });
-          this.posElapsed = 0;
+          this.posElapsed = this.app.ticker.elapsedMS;
+          this.lastPosSentAtN1 = this.lastPosSentAt;
+          this.lastPosSentAt = new Date().getTime();
         });
         this.communicator.on(MsgType.ReceivePlayer, (player: PlayerPayload) => {
           this.player = createCharacter(
@@ -93,16 +100,12 @@ export class Game {
           );
           // DEBUG
           this.player.sprite.tint = 0x70fab0;
-          this.player.sprite.alpha = 0;
+          this.player.sprite.alpha = 0.5;
           //
           this.renderPlayer();
           this.app.stage.addChild(this.player.sprite);
           this.player.sprite.on("pointermove", () => moveChararacter(this.player, this.app));
         });
-
-        this.communicator.sendMsg(
-          JSON.stringify({ type: MsgType.AnnouncePlayer, payload: { name: "Doc" } })
-        );
       })
       .catch(err => {
         this.onConnectionFailure && this.onConnectionFailure();
@@ -146,11 +149,11 @@ export class Game {
   }
 
   renderPlayers(delta: number) {
-    this.posElapsed += this.app.ticker.elapsedMS;
     if (!this.player) {
       return;
     }
     const mapTileSize = this.map.mapTileSize;
+    const lag = (this.lastPosSentAt - this.lastPosSentAtN1) * 3;
 
     const mapOrigin: XYVec = {
       x: window.innerWidth / 2,
@@ -159,37 +162,45 @@ export class Game {
 
     Object.keys(this.players).forEach(id => {
       const p = this.players[id];
-
-      const orientation = Math.atan2(p.orientation.y, p.orientation.x);
-      p.sprite.rotation = orientation + 1.57; // (1.57 = 90deg)
-
-      const x = this.lerp(
-        this.lastPos[id].position.x,
-        p.position.x,
-        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
-      );
-      const y = this.lerp(
-        this.lastPos[id].position.y,
+      console.log(
+        "fromPos",
+        this.predictedPos[id].y,
+        "toPos",
         p.position.y,
-        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+        "lerp",
+        this.lerp(this.predictedPos[id].y, p.position.y, this.posElapsed / lag),
+        "delta",
+        this.posElapsed / lag
       );
+
+      let x;
+      let y;
+      if (this.posElapsed <= lag) {
+        x = this.lerp(this.predictedPos[id].x, p.position.x, this.posElapsed / lag);
+        y = this.lerp(this.predictedPos[id].y, p.position.y, this.posElapsed / lag);
+      } else {
+        x = p.position.x;
+        y = p.position.y;
+      }
       this.curPredictedPos[id] = { x, y };
+
       p.sprite.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
       p.sprite.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
 
       const rx = this.lerp(
         this.lastPos[id].orientation.x,
         p.orientation.x,
-        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+        this.posElapsed / (this.lastPosSentAt - this.lastPosSentAtN1)
       );
       const ry = this.lerp(
         this.lastPos[id].orientation.y,
         p.orientation.y,
-        this.posElapsed / (p.updatedAt - this.lastPos[id].ts)
+        this.posElapsed / (this.lastPosSentAt - this.lastPosSentAtN1)
       );
 
       p.sprite.rotation = Math.atan2(ry, rx) + 1.57;
     });
+    this.posElapsed += this.app.ticker.elapsedMS;
   }
 
   timerDelay = 0;
