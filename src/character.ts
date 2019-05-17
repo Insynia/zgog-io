@@ -1,75 +1,81 @@
+import { PlayerPayload } from "./communication";
 import { XYVec } from "./character";
 import * as PIXI from "pixi.js";
-
-export const characterSize = 1;
-export const characterSpeed = 0.05;
+import { Resources } from "./game";
 
 export interface XYVec {
   x: number;
   y: number;
 }
 
-export interface Character {
+export class Character {
   id: string;
-  updatedAt: number;
   position: XYVec;
-  sprite: PIXI.Sprite;
+  name: string;
+  body: PIXI.Container;
   orientation: XYVec;
   velocity: XYVec;
-}
+  resources: Resources;
+  lastLocalPos: { position: XYVec; orientation: XYVec };
+  curPredictedPos: { position: XYVec; orientation: XYVec };
+  characterSize = 1;
+  characterSpeed = 0.05;
 
-export function createCharacter(
-  resources: { [sprite: string]: { texture: PIXI.Texture } },
-  id: string,
-  position: XYVec,
-  orientation: XYVec,
-  velocity: XYVec
-): Character {
-  const sprite = new PIXI.Sprite(resources.char.texture);
-  sprite.interactive = true;
+  constructor(resources: Resources, player: PlayerPayload) {
+    const sprite = new PIXI.Sprite(resources.char.texture);
 
-  const v = velocity || { x: 0, y: 0 };
-  const o = orientation || { x: 0, y: 0 };
-  const p = position || { x: 0, y: 0 };
+    const v = player.velocity || { x: 0, y: 0 };
+    const o = player.orientation || { x: 0, y: 0 };
+    const p = player.position || { x: 0, y: 0 };
 
-  sprite.anchor.set(0.5);
-  let char: Character = {
-    id,
-    updatedAt: new Date().getTime(),
-    position: p,
-    orientation: o,
-    velocity: v,
-    sprite
-  };
-  return char;
-}
+    this.lastLocalPos = { orientation: o, position: p };
+    this.curPredictedPos = { orientation: o, position: p };
 
-export function moveChararacter(char: Character, app: PIXI.Application) {
-  const mouseLeeway = 32;
-  const mouseX = app.renderer.plugins.interaction.mouse.global.x;
-  const mouseY = app.renderer.plugins.interaction.mouse.global.y;
+    sprite.anchor.set(0.5);
 
-  char.orientation = { y: mouseY - window.innerHeight / 2, x: mouseX - window.innerWidth / 2 };
+    const container = new PIXI.Container();
+    container.interactive = true;
+    container.addChild(sprite);
 
-  const orientation = Math.atan2(mouseY - window.innerHeight / 2, mouseX - window.innerWidth / 2);
-  char.sprite.rotation = orientation + 1.57; // (1.57 = 90deg)
-
-  if (mouseY > app.renderer.height / 2 + mouseLeeway) {
-    char.velocity.y = characterSpeed * (2 - Math.max(1, app.renderer.height / 1.2 / mouseY));
-  } else if (mouseY < app.renderer.height / 2 - mouseLeeway) {
-    char.velocity.y =
-      -characterSpeed *
-      (2 - Math.max(1, app.renderer.height / 1.2 / (app.renderer.height - mouseY)));
-  } else {
-    char.velocity.y = 0;
+    this.resources = resources;
+    this.id = player.id;
+    this.position = p;
+    this.orientation = o;
+    this.velocity = v;
+    this.body = container;
   }
-  if (mouseX > app.renderer.width / 2 + mouseLeeway) {
-    char.velocity.x = characterSpeed * (2 - Math.max(1, app.renderer.width / 1.2 / mouseX));
-  } else if (mouseX < app.renderer.width / 2 - mouseLeeway) {
-    char.velocity.x =
-      -characterSpeed * (2 - Math.max(1, app.renderer.width / 1.2 / (app.renderer.width - mouseX)));
-  } else {
-    char.velocity.x = 0;
+
+  update(player: PlayerPayload) {
+    this.position = player.position;
+    this.velocity = player.velocity;
+    this.orientation = player.orientation;
+    this.name = player.name;
+    this.lastLocalPos = this.curPredictedPos;
+  }
+
+  move(mouse: { x: number; y: number }) {
+    const mouseLeeway = 32;
+
+    this.orientation = { y: mouse.y - window.innerHeight / 2, x: mouse.x - window.innerWidth / 2 };
+
+    if (mouse.y > window.innerHeight / 2 + mouseLeeway) {
+      this.velocity.y = this.characterSpeed * (2 - Math.max(1, window.innerHeight / 1.2 / mouse.y));
+    } else if (mouse.y < window.innerHeight / 2 - mouseLeeway) {
+      this.velocity.y =
+        -this.characterSpeed *
+        (2 - Math.max(1, window.innerHeight / 1.2 / (window.innerHeight - mouse.y)));
+    } else {
+      this.velocity.y = 0;
+    }
+    if (mouse.x > window.innerWidth / 2 + mouseLeeway) {
+      this.velocity.x = this.characterSpeed * (2 - Math.max(1, window.innerWidth / 1.2 / mouse.x));
+    } else if (mouse.x < window.innerWidth / 2 - mouseLeeway) {
+      this.velocity.x =
+        -this.characterSpeed *
+        (2 - Math.max(1, window.innerWidth / 1.2 / (window.innerWidth - mouse.x)));
+    } else {
+      this.velocity.x = 0;
+    }
   }
 }
 

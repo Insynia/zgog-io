@@ -1,9 +1,9 @@
 import * as PIXI from "pixi.js";
 import { Map } from "./map";
 import { Communicator, setupSocket, MsgType, MapPayload, PlayerPayload } from "./communication";
-import { createCharacter, Character, XYVec, moveChararacter } from "./character";
+import { Character, XYVec } from "./character";
 
-interface Resources {
+export interface Resources {
   [sprite: string]: { texture: PIXI.Texture; textures: { [sprite: string]: PIXI.Texture } };
 }
 
@@ -18,11 +18,8 @@ export class Game {
   players: { [id: string]: Character };
   onResourcesLoad: () => void;
   onConnectionFailure: () => void;
-  lastPos: { [id: string]: { ts: number; position: XYVec; orientation: XYVec } } = {};
-  lastPosSentAt: number = new Date().getTime();
-  lastPosSentAtN1: number = new Date().getTime();
-  curPredictedPos: { [id: string]: XYVec } = {};
-  predictedPos: { [id: string]: XYVec } = {};
+  lastTick: number = new Date().getTime();
+  beforeLastTick: number = new Date().getTime();
 
   posElapsed = 0;
 
@@ -41,9 +38,6 @@ export class Game {
         this.communicator.on(MsgType.Map, (data: MapPayload) => {
           this.map = new Map(data, this.resources);
 
-          this.app.ticker.add(delta => this.loop(delta));
-          this.app.ticker.add(delta => this.renderPlayers(delta));
-
           this.app.stage.addChild(this.map.tileMap.landTileSprites);
           this.app.stage.addChild(this.map.tileMap.objectSprites);
           window.onresize = () => this.resizeGame();
@@ -54,57 +48,35 @@ export class Game {
             return;
           }
           players.forEach(player => {
-            const p = this.players[player.id];
             if (!this.players[player.id]) {
-              const char = createCharacter(
-                this.resources,
-                player.id,
-                player.position,
-                player.orientation,
-                player.velocity
-              );
-              char.sprite.height = characterSize * this.map.mapTileSize;
-              char.sprite.width = characterSize * this.map.mapTileSize;
-              this.app.stage.addChild(char.sprite);
+              const char = new Character(this.resources, player);
+              char.body.height = characterSize * this.map.mapTileSize;
+              char.body.width = characterSize * this.map.mapTileSize;
+              this.app.stage.addChild(char.body);
 
               this.players[player.id] = char;
-              this.curPredictedPos[player.id] = char.position;
-              this.predictedPos[player.id] = char.position;
-              this.lastPos[player.id] = {
-                ts: char.updatedAt,
-                position: char.position,
-                orientation: char.orientation
-              };
             } else {
-              this.predictedPos[player.id] = this.curPredictedPos[player.id];
-              this.lastPos[player.id] = {
-                ts: p.updatedAt,
-                position: this.curPredictedPos[player.id],
-                orientation: p.orientation
-              };
-              p.updatedAt = new Date().getTime();
-              this.players[player.id] = { ...p, ...player };
+              this.players[player.id].update(player);
             }
           });
           this.posElapsed = this.app.ticker.elapsedMS;
-          this.lastPosSentAtN1 = this.lastPosSentAt;
-          this.lastPosSentAt = new Date().getTime();
+          this.beforeLastTick = this.lastTick;
+          this.lastTick = new Date().getTime();
         });
         this.communicator.on(MsgType.ReceivePlayer, (player: PlayerPayload) => {
-          this.player = createCharacter(
-            this.resources,
-            player.id,
-            player.position,
-            player.orientation,
-            player.velocity
-          );
+          this.player = new Character(this.resources, player);
           // DEBUG
-          this.player.sprite.tint = 0x70fab0;
-          this.player.sprite.alpha = 0.5;
+          // this.player.body.tint = 0x70fab0;
+          this.player.body.alpha = 0.5;
           //
           this.renderPlayer();
-          this.app.stage.addChild(this.player.sprite);
-          this.player.sprite.on("pointermove", () => moveChararacter(this.player, this.app));
+          this.app.stage.addChild(this.player.body);
+          this.player.body.on("pointermove", () =>
+            this.player.move(this.app.renderer.plugins.interaction.mouse.global)
+          );
+
+          this.app.ticker.add(delta => this.renderLocalMovement(delta));
+          this.app.ticker.add(delta => this.renderPlayers(delta));
         });
       })
       .catch(err => {
@@ -113,10 +85,10 @@ export class Game {
   }
 
   renderPlayer() {
-    this.player.sprite.x = window.innerWidth / 2;
-    this.player.sprite.y = window.innerHeight / 2;
-    this.player.sprite.height = characterSize * this.map.mapTileSize;
-    this.player.sprite.width = characterSize * this.map.mapTileSize;
+    this.player.body.x = window.innerWidth / 2;
+    this.player.body.y = window.innerHeight / 2;
+    this.player.body.height = characterSize * this.map.mapTileSize;
+    this.player.body.width = characterSize * this.map.mapTileSize;
   }
 
   resizeGame() {
@@ -125,8 +97,8 @@ export class Game {
     this.renderPlayer();
     Object.keys(this.players).forEach(key => {
       const p = this.players[key];
-      p.sprite.height = characterSize * this.map.mapTileSize;
-      p.sprite.width = characterSize * this.map.mapTileSize;
+      p.body.height = characterSize * this.map.mapTileSize;
+      p.body.width = characterSize * this.map.mapTileSize;
     });
   }
 
@@ -149,11 +121,8 @@ export class Game {
   }
 
   renderPlayers(delta: number) {
-    if (!this.player) {
-      return;
-    }
     const mapTileSize = this.map.mapTileSize;
-    const lag = (this.lastPosSentAt - this.lastPosSentAtN1) * 3;
+    const lag = (this.lastTick - this.beforeLastTick) * 3;
 
     const mapOrigin: XYVec = {
       x: window.innerWidth / 2,
@@ -162,56 +131,34 @@ export class Game {
 
     Object.keys(this.players).forEach(id => {
       const p = this.players[id];
-      console.log(
-        "fromPos",
-        this.predictedPos[id].y,
-        "toPos",
-        p.position.y,
-        "lerp",
-        this.lerp(this.predictedPos[id].y, p.position.y, this.posElapsed / lag),
-        "delta",
-        this.posElapsed / lag
-      );
 
-      let x;
-      let y;
-      if (this.posElapsed <= lag) {
-        x = this.lerp(this.predictedPos[id].x, p.position.x, this.posElapsed / lag);
-        y = this.lerp(this.predictedPos[id].y, p.position.y, this.posElapsed / lag);
-      } else {
-        x = p.position.x;
-        y = p.position.y;
-      }
-      this.curPredictedPos[id] = { x, y };
+      const x = this.lerp(p.lastLocalPos.position.x, p.position.x, this.posElapsed / lag);
+      const y = this.lerp(p.lastLocalPos.position.y, p.position.y, this.posElapsed / lag);
 
-      p.sprite.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
-      p.sprite.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
+      p.body.x = mapOrigin.x + (x - this.player.position.x) * mapTileSize;
+      p.body.y = mapOrigin.y + (y - this.player.position.y) * mapTileSize;
 
       const rx = this.lerp(
-        this.lastPos[id].orientation.x,
+        p.lastLocalPos.orientation.x,
         p.orientation.x,
-        this.posElapsed / (this.lastPosSentAt - this.lastPosSentAtN1)
+        this.posElapsed / (this.lastTick - this.beforeLastTick)
       );
       const ry = this.lerp(
-        this.lastPos[id].orientation.y,
+        p.lastLocalPos.orientation.y,
         p.orientation.y,
-        this.posElapsed / (this.lastPosSentAt - this.lastPosSentAtN1)
+        this.posElapsed / (this.lastTick - this.beforeLastTick)
       );
 
-      p.sprite.rotation = Math.atan2(ry, rx) + 1.57;
+      p.curPredictedPos = { position: { x, y }, orientation: { x: rx, y: ry } };
+      p.body.rotation = Math.atan2(ry, rx) + 1.57;
     });
     this.posElapsed += this.app.ticker.elapsedMS;
   }
 
   timerDelay = 0;
 
-  loop(delta: number) {
-    if (!this.player) {
-      return;
-    }
-
+  renderLocalMovement(delta: number) {
     const mapTileSize = this.map.mapTileSize;
-
     const mapOrigin: XYVec = {
       x: window.innerWidth / 2,
       y: window.innerHeight / 2
@@ -227,15 +174,19 @@ export class Game {
       )
     };
 
-    const nextTile = this.map.tileMap.tiles[
-      `${Math.floor(newCharPos.x)};${Math.floor(newCharPos.y)}`
+    const nextTileX = this.map.tileMap.tiles[
+      `${Math.floor(newCharPos.x)};${Math.floor(this.player.position.y)}`
     ];
-    if (nextTile && nextTile.walkable) {
+    const nextTileY = this.map.tileMap.tiles[
+      `${Math.floor(this.player.position.x)};${Math.floor(newCharPos.y)}`
+    ];
+    if (nextTileY && nextTileX && nextTileY.walkable && nextTileX.walkable) {
       this.player.position.x = newCharPos.x;
       this.player.position.y = newCharPos.y;
-      // speed.text = `Speed: ${this.player.velocity.x} | ${this.player.velocity.y}`;
-    } else {
-      // speed.text = `Speed: ${this.player.velocity.x} | ${this.player.velocity.y} (Stucked)`;
+    } else if (nextTileY && nextTileY.walkable) {
+      this.player.position.y = newCharPos.y;
+    } else if (nextTileX && nextTileX.walkable) {
+      this.player.position.x = newCharPos.x;
     }
 
     this.map.tileMap.landTileSprites.x = mapOrigin.x - this.player.position.x * mapTileSize;
@@ -243,7 +194,7 @@ export class Game {
     this.map.tileMap.objectSprites.x = mapOrigin.x - this.player.position.x * mapTileSize;
     this.map.tileMap.objectSprites.y = mapOrigin.y - this.player.position.y * mapTileSize;
 
-    if (this.timerDelay >= 3 /* && coords have changed */) {
+    if (this.timerDelay >= 3) {
       // * 16 ms * 3
       this.communicator.sendMsg(
         JSON.stringify({
