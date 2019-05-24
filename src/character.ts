@@ -18,11 +18,16 @@ export class Character {
   resources: Resources;
   lastLocalPos: { position: XYVec; orientation: XYVec };
   curPredictedPos: { position: XYVec; orientation: XYVec };
-  characterSize = 1;
+  bodySize = 1;
+  handSize = 0.25;
   characterSpeed = 0.05;
 
-  constructor(resources: Resources, player: PlayerPayload) {
-    const sprite = new PIXI.Sprite(resources.char.texture);
+  constructor(resources: Resources, player: PlayerPayload, size: number) {
+    const textures = resources.character.textures;
+    const body = new PIXI.Sprite(textures.body);
+    const helmet = new PIXI.Sprite(textures.helmet);
+    const leftHand = new PIXI.Sprite(textures.hand);
+    const rightHand = new PIXI.Sprite(textures.hand);
 
     const v = player.velocity || { x: 0, y: 0 };
     const o = player.orientation || { x: 0, y: 0 };
@@ -31,11 +36,32 @@ export class Character {
     this.lastLocalPos = { orientation: o, position: p };
     this.curPredictedPos = { orientation: o, position: p };
 
-    sprite.anchor.set(0.5);
+    leftHand.anchor.set(0.5);
+    rightHand.anchor.set(0.5);
+    body.anchor.set(0.5);
+    helmet.anchor.set(0.5);
+    leftHand.height = this.handSize * size;
+    leftHand.width = this.handSize * size;
+    rightHand.height = this.handSize * size;
+    rightHand.width = this.handSize * size;
+    leftHand.x = (-size * this.bodySize) / 4;
+    leftHand.y = (-size * this.bodySize) / 4;
+    rightHand.x = (size * this.bodySize) / 4;
+    rightHand.y = (-size * this.bodySize) / 4;
+    body.height = this.bodySize * size;
+    body.width = this.bodySize * size;
+    helmet.height = this.bodySize * size;
+    helmet.width = this.bodySize * size;
 
     const container = new PIXI.Container();
     container.interactive = true;
-    container.addChild(sprite);
+    container.zIndex = 2;
+    container.addChild(leftHand);
+    container.addChild(rightHand);
+    container.addChild(body);
+    if (player.name === "Doc")
+      // Oh youuuu !
+      container.addChild(helmet);
 
     this.resources = resources;
     this.id = player.id;

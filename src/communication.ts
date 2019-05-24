@@ -17,18 +17,30 @@ export interface PlayerPayload {
   velocity: XYVec;
 }
 
+export interface ObjectPayload {
+  // Non walkable
+  type: number;
+  size: number; // (0-5)
+}
+
+export interface VisualPayload {
+  // Non walkable
+  type: number;
+  size: number; // (0-5)
+}
+
 export interface TilePayload {
   x: number;
   y: number;
   type: number;
-  index: number;
-  walkable: boolean;
+  objects: ObjectPayload[];
+  visuals: VisualPayload[];
 }
 
 export interface MapPayload {
   width: number;
   height: number;
-  content: { [coords: string]: TilePayload[] };
+  content: { [coords: string]: TilePayload };
 }
 
 export const setupSocket = async (): Promise<Communicator> => {
@@ -72,6 +84,16 @@ export class Communicator {
   }
 
   sendMsg(msg: string | ArrayBuffer | Blob | ArrayBufferView) {
-    this.socket.send(msg);
+    try {
+      if (this.socket.readyState == 1) {
+        this.socket.send(msg);
+      } else {
+        // TODO handle this (currently activate the failedConnectionError (game.ts))
+
+        throw "Socket down";
+      }
+    } catch (err) {
+      throw err;
+    }
   }
 }

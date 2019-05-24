@@ -49,9 +49,7 @@ export class Game {
           }
           players.forEach(player => {
             if (!this.players[player.id]) {
-              const char = new Character(this.resources, player);
-              char.body.height = characterSize * this.map.mapTileSize;
-              char.body.width = characterSize * this.map.mapTileSize;
+              const char = new Character(this.resources, player, this.map.mapTileSize);
               this.app.stage.addChild(char.body);
 
               this.players[player.id] = char;
@@ -64,10 +62,10 @@ export class Game {
           this.lastTick = new Date().getTime();
         });
         this.communicator.on(MsgType.ReceivePlayer, (player: PlayerPayload) => {
-          this.player = new Character(this.resources, player);
+          this.player = new Character(this.resources, player, this.map.mapTileSize);
           // DEBUG
           // this.player.body.tint = 0x70fab0;
-          this.player.body.alpha = 0.5;
+          this.player.body.alpha = 0.0;
           //
           this.renderPlayer();
           this.app.stage.addChild(this.player.body);
@@ -106,7 +104,7 @@ export class Game {
     return new Promise((resolve, reject) => {
       this.app.loader
         .add("sprites", "spritesheet.json")
-        .add("char", "char.png")
+        .add("character", "character.json")
         .load((_loader: any, resources: Resources) => {
           this.resources = resources;
           this.onResourcesLoad && this.onResourcesLoad();
@@ -196,16 +194,20 @@ export class Game {
 
     if (this.timerDelay >= 3) {
       // * 16 ms * 3
-      this.communicator.sendMsg(
-        JSON.stringify({
-          type: MsgType.UpdateCoords,
-          payload: {
-            position: this.player.position,
-            orientation: this.player.orientation,
-            velocity: this.player.velocity
-          }
-        })
-      );
+      try {
+        this.communicator.sendMsg(
+          JSON.stringify({
+            type: MsgType.UpdateCoords,
+            payload: {
+              position: this.player.position,
+              orientation: this.player.orientation,
+              velocity: this.player.velocity
+            }
+          })
+        );
+      } catch (_) {
+        this.onConnectionFailure && this.onConnectionFailure();
+      }
       this.timerDelay = 0;
     } else {
       this.timerDelay += delta;

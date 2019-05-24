@@ -26,13 +26,12 @@ end
 
 def build(type = 'build')
   content_entry = File.expand_path('./src/index.html', __dir__)
-  tiles = Dir.glob(File.expand_path('./src/assets/tiles/', __dir__) + '/*')
-  other_assets = Dir.glob(File.expand_path('./src/assets/', __dir__) + '/*.*')
+  assets = Dir.glob(File.expand_path('./src/assets/', __dir__) + '/*')
   out_folder = File.expand_path(type == 'watch' ? './dist/' : './build/', __dir__)
 
   build_cmd = "parcel #{type == 'watch' ? '' : type} #{content_entry} -d #{out_folder}".freeze
 
-  tiles_cmd = "cp #{[tiles + other_assets].join(' ')} #{out_folder}".freeze
+  tiles_cmd = "cp #{assets.join(' ')} #{out_folder}".freeze
 
   spawn tiles_cmd
   `#{build_cmd}`

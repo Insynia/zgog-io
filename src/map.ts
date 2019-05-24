@@ -1,6 +1,6 @@
 import * as PIXI from "pixi.js";
 import { XYVec, Character } from "./character";
-import { TilePayload, MapPayload } from "./communication";
+import { TilePayload, MapPayload, ObjectPayload, VisualPayload } from "./communication";
 
 export enum TileType {
   Water,
@@ -61,36 +61,36 @@ export class Map {
 
     const textures = this.resources.sprites.textures;
 
+    const addObject = (elem: ObjectPayload): PIXI.Sprite => {
+      const sprite = new PIXI.Sprite(textures[getObjectName(elem.type)]);
+      this.tileMap.objectSprites.addChild(sprite);
+      return sprite;
+    };
+
+    const addVisual = (elem: VisualPayload): PIXI.Sprite => {
+      const sprite = new PIXI.Sprite(textures[getVisualName(elem.type)]);
+      this.tileMap.landTileSprites.addChild(sprite);
+      return sprite;
+    };
+
+    const addElem = (elem: TilePayload, sprites: PIXI.Sprite[]) => {
+      const tile: TileSummary = {
+        x: elem.x,
+        y: elem.y,
+        type: elem.type,
+        walkable: elem.objects.length == 0 && !elem.visuals.map(e => e.type).includes(0),
+        sprites
+      };
+
+      this.tileMap.tiles[`${elem.x};${elem.y}`] = tile;
+    };
+
     Object.keys(map.content).forEach(key => {
-      const elems: TilePayload[] = map.content[key];
-      elems.forEach(elem => {
-        const sprite = new PIXI.Sprite(textures[getSpriteName(elem.type)]);
-
-        if (elem.type < 3) {
-          this.tileMap.landTileSprites.addChild(sprite);
-        } else {
-          this.tileMap.objectSprites.addChild(sprite);
-        }
-
-        const oldTileSummary: TileSummary = this.tileMap.tiles[`${elem.x};${elem.y}`];
-        let walkable = true;
-        let sprites = [sprite];
-        if (oldTileSummary) {
-          walkable = oldTileSummary.walkable;
-          sprites = [sprite, ...oldTileSummary.sprites];
-        }
-
-        const tile: TileSummary = {
-          x: elem.x,
-          y: elem.y,
-          type: elem.type,
-          gatherable: false,
-          walkable: !walkable ? false : elem.walkable,
-          sprites
-        };
-
-        this.tileMap.tiles[`${elem.x};${elem.y}`] = tile;
-      });
+      const elem: TilePayload = map.content[key];
+      let sprites: PIXI.Sprite[] = [];
+      sprites = sprites.concat(elem.objects.map(e => addObject(e)));
+      sprites = sprites.concat(elem.visuals.map(e => addVisual(e)));
+      addElem(elem, sprites);
     });
 
     this.render();
@@ -98,7 +98,7 @@ export class Map {
   }
 }
 
-const getSpriteName = (i: number) => {
+const getVisualName = (i: number) => {
   switch (i) {
     case 0:
       return "water";
@@ -107,11 +107,20 @@ const getSpriteName = (i: number) => {
     case 2:
       return "grass";
     case 3:
-      return "tree";
-    case 4:
-      return "stone";
+      return "concrete";
     default:
       return "concrete";
+  }
+};
+
+const getObjectName = (i: number) => {
+  switch (i) {
+    case 0:
+      return "tree";
+    case 1:
+      return "stone";
+    default:
+      return "tree";
   }
 };
 
@@ -121,7 +130,6 @@ export interface TileSummary {
   sprites: PIXI.Sprite[];
   type: TileType;
   walkable: boolean;
-  gatherable: boolean;
 }
 
 export interface TileMap {
