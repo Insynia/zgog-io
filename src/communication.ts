@@ -45,7 +45,7 @@ export interface MapPayload {
 }
 
 export const setupSocket = async (): Promise<Communicator> => {
-  const communicator = new Communicator("ws://localhost:2794/");
+  const communicator = new Communicator("ws://146.148.12.245:2794/");
   await communicator.connect();
   return communicator;
 };

@@ -1,4 +1,6 @@
 {
+  "name": "Zgog.io",
+  "version": "0.0.1",
   "dependencies": {
     "@types/pixi.js": "^4.8.7",
     "parcel": "^1.12.3",
