@@ -15,6 +15,7 @@ export interface PlayerPayload {
   position: XYVec;
   orientation: XYVec;
   velocity: XYVec;
+  hitting: boolean;
 }
 
 export interface ObjectPayload {

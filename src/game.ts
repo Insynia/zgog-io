@@ -75,6 +75,20 @@ export class Game {
 
           this.app.ticker.add(delta => this.renderLocalMovement(delta));
           this.app.ticker.add(delta => this.renderPlayers(delta));
+          this.app.ticker.add(delta =>
+            Object.keys(this.players).forEach((pKey: string) =>
+              this.players[pKey].animate(this.app.ticker.elapsedMS)
+            )
+          );
+
+          document.addEventListener("pointerdown", () => {
+            this.player.hitting = true;
+          });
+
+          document.addEventListener("pointerup", () => {
+            this.player.hitting = false;
+            this.player.resetAnimation();
+          });
         });
       })
       .catch(err => {
@@ -201,7 +215,8 @@ export class Game {
             payload: {
               position: this.player.position,
               orientation: this.player.orientation,
-              velocity: this.player.velocity
+              velocity: this.player.velocity,
+              hitting: this.player.hitting
             }
           })
         );

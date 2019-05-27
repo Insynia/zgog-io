@@ -8,6 +8,21 @@ export enum TileType {
   Grass
 }
 
+export interface TileSummary {
+  x: number;
+  y: number;
+  sprites: PIXI.Sprite[];
+  type: TileType;
+  walkable: boolean;
+}
+
+export interface TileMap {
+  tiles: { [coords: string]: TileSummary };
+  landTileSprites: PIXI.ParticleContainer | PIXI.Container;
+  objectSprites: PIXI.ParticleContainer | PIXI.Container;
+  size: XYVec;
+}
+
 export class Map {
   public mapTileSize: number;
   resources: {
@@ -123,18 +138,3 @@ const getObjectName = (i: number) => {
       return "tree";
   }
 };
-
-export interface TileSummary {
-  x: number;
-  y: number;
-  sprites: PIXI.Sprite[];
-  type: TileType;
-  walkable: boolean;
-}
-
-export interface TileMap {
-  tiles: { [coords: string]: TileSummary };
-  landTileSprites: PIXI.ParticleContainer | PIXI.Container;
-  objectSprites: PIXI.ParticleContainer | PIXI.Container;
-  size: XYVec;
-}
